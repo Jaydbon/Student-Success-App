@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'schedule_page.dart';
 void main() {
   runApp(_MyApp());
 }
@@ -60,12 +60,26 @@ class HomePageState extends State<HomePage> {
       selectedIndex = index;
     });
   }
+
+  final List<Widget> _pages = const [
+    SchedulePage(), // 👈 this runs the external file
+    Center(child: Text('Timer (coming soon)')),
+    Center(child: Text('Home (coming soon)')),
+    Center(child: Text('Food (coming soon)')),
+    Center(child: Text('Map (coming soon)')),
+  ];
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(pages[selectedIndex]),
       ),
+
+      body: _pages[selectedIndex],
+
+
       bottomNavigationBar: Container(
     margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
  // space around the bar
