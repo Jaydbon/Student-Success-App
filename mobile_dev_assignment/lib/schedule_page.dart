@@ -145,8 +145,10 @@ class _SchedulePageState extends State<SchedulePage> {
         dueDatetime: '2025-09-26 23:59',
         submissionLocation: 'Postman',
       ));
-    } catch (e) {
-      // ignore insertion errors (unique constraints) during repeated runs
+    } catch (e, st) {
+      // print the exception so you can see why seeding failed
+      // (don't swallow errors silently)
+      debugPrint('Seed error: $e\n$st');
     }
 
     // Build DaySchedule objects reading back from the DB
@@ -594,8 +596,19 @@ class DatabaseProvider {
   // Locations
   Future<int> insertLocation(Location loc) async {
     final db = await database;
-    return await db.insert('locations', loc.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
+    // Try to find existing row first
+    final rows = await db.query(
+      'locations',
+      where: 'building_name = ? AND (room IS ? OR room = ?)',
+      whereArgs: [loc.buildingName, loc.room, loc.room],
+    );
+    if (rows.isNotEmpty) {
+      return rows.first['id'] as int;
+    }
+    // Not present -> insert and return the inserted id
+    return await db.insert('locations', loc.toMap());
   }
+
 
   Future<Location?> getLocationByBuildingAndRoom(String building, String? room) async {
     final db = await database;
