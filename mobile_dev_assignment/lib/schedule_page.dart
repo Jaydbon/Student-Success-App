@@ -191,21 +191,369 @@ class _SchedulePageState extends State<SchedulePage> {
       _days = built;
     });
   }
+  // Replace your existing _showSimpleDialog with this version:
+  final GlobalKey<FormState> _classFormKey = GlobalKey<FormState>();
+  final GlobalKey<FormState> _assignmentFormKey = GlobalKey<FormState>();
+
+  void _showSimpleDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return SimpleDialog(
+          backgroundColor: const Color(0xFF2A3036),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Add New...',
+            style: TextStyle(color: Color(0xFFF7ECE1)),
+          ),
+          children: <Widget>[
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, 'Add Class'),
+              child: const Text('Add Class', style: TextStyle(color: Color(0xFF759FBC))),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, 'Add Assignment'),
+              child: const Text('Add Assignment', style: TextStyle(color: Color(0xFF759FBC))),
+            ),
+          ],
+        );
+      },
+    ).then((value) {
+      if (value == null) return;
+      if (value == 'Add Class') {
+        // Class form dialog
+        final courseCodeCtl = TextEditingController();
+        final courseTitleCtl = TextEditingController();
+        final sectionCtl = TextEditingController();
+        final buildingCtl = TextEditingController();
+        final roomCtl = TextEditingController();
+        TimeOfDay? startTime = TimeOfDay(hour: 9, minute: 0);
+        TimeOfDay? endTime = TimeOfDay(hour: 10, minute: 0);
+        String typeValue = 'lecture';
+        final List<bool> weekdaySelected = List<bool>.filled(7, false); // Mon..Sun
+
+        showDialog(
+          context: context,
+          builder: (BuildContext ctx) {
+            return StatefulBuilder(builder: (ctx, setState) {
+              Future<void> pickStart() async {
+                final t = await showTimePicker(context: ctx, initialTime: startTime!);
+                if (t != null) setState(() => startTime = t);
+              }
+
+              Future<void> pickEnd() async {
+                final t = await showTimePicker(context: ctx, initialTime: endTime!);
+                if (t != null) setState(() => endTime = t);
+              }
+
+              int toMinutes(TimeOfDay t) => t.hour * 60 + t.minute;
+
+              return SimpleDialog(
+                backgroundColor: const Color(0xFF2A3036),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: const Text('Add New Class', style: TextStyle(color: Color(0xFFF7ECE1))),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Form(
+                      key: _classFormKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextFormField(
+                            controller: courseCodeCtl,
+                            decoration: const InputDecoration(labelText: 'Course Code', hintText: 'e.g. CSCI101'),
+                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Course code required' : null,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: courseTitleCtl,
+                            decoration: const InputDecoration(labelText: 'Course Title (optional)'),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            initialValue: typeValue,
+                            items: const [
+                              DropdownMenuItem(value: 'lecture', child: Text('Lecture')),
+                              DropdownMenuItem(value: 'lab', child: Text('Lab')),
+                              DropdownMenuItem(value: 'tutorial', child: Text('Tutorial')),
+                              DropdownMenuItem(value: 'workshop', child: Text('Workshop')),
+                            ],
+                            onChanged: (v) => setState(() => typeValue = v ?? 'lecture'),
+                            decoration: const InputDecoration(labelText: 'Session Type'),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: sectionCtl,
+                            decoration: const InputDecoration(labelText: 'Section (optional)', hintText: 'e.g. A, W1'),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: buildingCtl,
+                                  decoration: const InputDecoration(labelText: 'Building (optional)'),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 100,
+                                child: TextFormField(
+                                  controller: roomCtl,
+                                  decoration: const InputDecoration(labelText: 'Room'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: pickStart,
+                                child: Text('Start: ${startTime!.format(ctx)}'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: pickEnd,
+                                child: Text('End: ${endTime!.format(ctx)}'),
+                              ),
+                            ),
+                          ]),
+                          const SizedBox(height: 8),
+                          // Weekday checkboxes
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: List<Widget>.generate(7, (i) {
+                              const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                              return FilterChip(
+                                label: Text(names[i]),
+                                selected: weekdaySelected[i],
+                                onSelected: (sel) => setState(() => weekdaySelected[i] = sel),
+                              );
+                            }),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    if (!_classFormKey.currentState!.validate()) return;
+
+                                    final selectedDays = <int>[];
+                                    for (int i = 0; i < 7; i++) if (weekdaySelected[i]) selectedDays.add(i);
+                                    if (selectedDays.isEmpty) {
+                                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Please select at least one weekday')));
+                                      return;
+                                    }
+
+                                    final sMinutes = toMinutes(startTime!);
+                                    final eMinutes = toMinutes(endTime!);
+                                    if (eMinutes <= sMinutes) {
+                                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('End time must be after start time')));
+                                      return;
+                                    }
+
+                                    final courseCode = courseCodeCtl.text.trim();
+                                    final courseTitle = courseTitleCtl.text.trim().isEmpty ? null : courseTitleCtl.text.trim();
+                                    final section = sectionCtl.text.trim().isEmpty ? null : sectionCtl.text.trim();
+                                    final building = buildingCtl.text.trim().isEmpty ? null : buildingCtl.text.trim();
+                                    final room = roomCtl.text.trim().isEmpty ? null : roomCtl.text.trim();
+
+                                    try {
+                                      // Ensure course exists (replace semantics)
+                                      await _dbp.insertCourse(Course(courseCode: courseCode, title: courseTitle));
+
+                                      // Insert location if provided and get id
+                                      int? locId;
+                                      if (building != null) {
+                                        locId = await _dbp.insertLocation(Location(buildingName: building, room: room));
+                                      }
+
+                                      final session = Session(
+                                        courseCode: courseCode,
+                                        type: typeValue,
+                                        section: section,
+                                        startMin: sMinutes,
+                                        endMin: eMinutes,
+                                        locationId: locId,
+                                        locationBuilding: building,
+                                        locationRoom: room,
+                                        weekdays: selectedDays,
+                                      );
+
+                                      await _dbp.insertSession(session);
+
+                                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Class added')));
+                                      Navigator.of(ctx).pop(); // close class dialog
+                                      _initDbAndLoad(); // refresh UI
+                                    } catch (e, st) {
+                                      debugPrint('Insert session error: $e\n$st');
+                                      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error adding class: $e')));
+                                    }
+                                  },
+                                  child: const Text('Submit Class'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            });
+          },
+        );
+      } else if (value == 'Add Assignment') {
+        // Assignment form dialog
+        final courseCodeCtl = TextEditingController();
+        final titleCtl = TextEditingController();
+        final submissionCtl = TextEditingController();
+        DateTime dueDate = DateTime.now().add(const Duration(days: 7));
+        TimeOfDay dueTime = TimeOfDay(hour: 23, minute: 59);
+
+        showDialog(
+          context: context,
+          builder: (BuildContext ctx) {
+            return StatefulBuilder(builder: (ctx, setState) {
+              Future<void> pickDate() async {
+                final d = await showDatePicker(
+                  context: ctx,
+                  initialDate: dueDate,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2100),
+                );
+                if (d != null) setState(() => dueDate = d);
+              }
+
+              Future<void> pickTime() async {
+                final t = await showTimePicker(context: ctx, initialTime: dueTime);
+                if (t != null) setState(() => dueTime = t);
+              }
+
+              String isoFromDateTime(DateTime dt) {
+                String two(int n) => n.toString().padLeft(2, '0');
+                return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
+              }
+
+              return SimpleDialog(
+                backgroundColor: const Color(0xFF2A3036),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: const Text('Add Assignment', style: TextStyle(color: Color(0xFFF7ECE1))),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Form(
+                      key: _assignmentFormKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextFormField(
+                            controller: courseCodeCtl,
+                            decoration: const InputDecoration(labelText: 'Course Code'),
+                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Course code required' : null,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: titleCtl,
+                            decoration: const InputDecoration(labelText: 'Title'),
+                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Title required' : null,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: submissionCtl,
+                            decoration: const InputDecoration(labelText: 'Submission Location (optional)'),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(children: [
+                            Expanded(child: OutlinedButton(onPressed: pickDate, child: Text('Date: ${dueDate.toLocal().toIso8601String().substring(0,10)}'))),
+                            const SizedBox(width: 8),
+                            Expanded(child: OutlinedButton(onPressed: pickTime, child: Text('Time: ${dueTime.format(ctx)}'))),
+                          ]),
+                          const SizedBox(height: 12),
+                          Row(children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  if (!_assignmentFormKey.currentState!.validate()) return;
+
+                                  final courseCode = courseCodeCtl.text.trim();
+                                  final title = titleCtl.text.trim();
+                                  final submission = submissionCtl.text.trim().isEmpty ? null : submissionCtl.text.trim();
+
+                                  final combined = DateTime(dueDate.year, dueDate.month, dueDate.day, dueTime.hour, dueTime.minute);
+                                  final iso = isoFromDateTime(combined);
+
+                                  try {
+                                    // Ensure course exists
+                                    await _dbp.insertCourse(Course(courseCode: courseCode, title: null));
+
+                                    final a = Assignment(courseCode: courseCode, title: title, dueDatetime: iso, submissionLocation: submission);
+                                    await _dbp.insertAssignment(a);
+
+                                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Assignment added')));
+                                    Navigator.of(ctx).pop(); // close assignment dialog
+                                    _initDbAndLoad(); // refresh UI
+                                  } catch (e, st) {
+                                    debugPrint('Insert assignment error: $e\n$st');
+                                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error adding assignment: $e')));
+                                  }
+                                },
+                                child: const Text('Submit Assignment'),
+                              ),
+                            ),
+                          ]),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            });
+          },
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
       padding: const EdgeInsets.all(12),
-      itemCount: _days.length,
+      itemCount: _days.length + 1,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, i) => _DayCard(day: _days[i]),
+      itemBuilder: (context, i) {
+        if (i == _days.length) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: FloatingActionButton(
+              onPressed: () { _showSimpleDialog(context); }, //onPressed,
+              child: Icon(Icons.add_circle_outline, size: 20),
+            ),
+          );
+        }
+        return _DayCard(
+          day: _days[i],
+          onDataChanged: _initDbAndLoad, // <-- Pass the function here
+        );
+      },
     );
   }
 }
 
 class _DayCard extends StatelessWidget {
   final DaySchedule day;
-  const _DayCard({required this.day});
+  final VoidCallback onDataChanged; // 1. Add callback to _DayCard
+
+  const _DayCard({    required this.day,
+    required this.onDataChanged, // 2. Add to constructor
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -231,9 +579,19 @@ class _DayCard extends StatelessWidget {
         ),
         children: [
           if (day.classes.isNotEmpty)
-            _SessionSection(label: 'Classes', sessions: day.classes, leading: const Icon(Icons.class_outlined)),
+            _SessionSection(
+              label: 'Classes',
+              sessions: day.classes,
+              leading: const Icon(Icons.class_outlined),
+              onDataChanged: onDataChanged,
+            ),
           if (day.assignments.isNotEmpty)
-            _AssignmentSection(label: 'Assignments', items: day.assignments, leading: const Icon(Icons.assignment_outlined)),
+            _AssignmentSection(
+                label: 'Assignments',
+                items: day.assignments,
+                leading: const Icon(Icons.assignment_outlined),
+                onDataChanged: onDataChanged,
+            ),
           const SizedBox(height: 8),
         ],
       ),
@@ -245,7 +603,14 @@ class _SessionSection extends StatelessWidget {
   final String label;
   final List<Session> sessions;
   final Widget leading;
-  const _SessionSection({required this.label, required this.sessions, required this.leading});
+  final VoidCallback onDataChanged;
+
+  const _SessionSection({
+    required this.label,
+    required this.sessions,
+    required this.leading,
+    required this.onDataChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -267,22 +632,51 @@ class _SessionSection extends StatelessWidget {
             final loc = (s.locationBuilding != null && s.locationBuilding!.isNotEmpty)
                 ? (s.locationRoom == null || s.locationRoom!.isEmpty ? s.locationBuilding! : '${s.locationBuilding!} ${s.locationRoom!}')
                 : '';
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFF343A40), borderRadius: BorderRadius.circular(14)),
-              child: Row(
-                children: [
-                  Icon(Icons.schedule_outlined, color: const Color(0xFF9FB3C6)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(title, style: base.bodyLarge?.copyWith(color: const Color(0xFFF7ECE1), fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text('$timeRange  •  $loc', style: base.bodyMedium?.copyWith(color: const Color(0xFF9FB3C6))),
-                    ]),
+            return GestureDetector(
+              onDoubleTap: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text("Delete $title?"),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text("Cancel"),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          try {
+                            await DatabaseProvider().deleteSession(s.id!);
+                            Navigator.of(context).pop();
+                            onDataChanged();
+                          } catch (e) {
+                            Navigator.of(context).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting session: $e')));
+                          }
+                        },
+                        child: const Text("Delete"),
+                      ),
+                    ],
                   ),
-                ],
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: const Color(0xFF343A40), borderRadius: BorderRadius.circular(14)),
+                child: Row(
+                  children: [
+                    Icon(Icons.schedule_outlined, color: const Color(0xFF9FB3C6)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(title, style: base.bodyLarge?.copyWith(color: const Color(0xFFF7ECE1), fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
+                        Text('$timeRange  •  $loc', style: base.bodyMedium?.copyWith(color: const Color(0xFF9FB3C6))),
+                      ]),
+                    ),
+                  ],
+                ),
               ),
             );
           }).toList(),
@@ -296,7 +690,14 @@ class _AssignmentSection extends StatelessWidget {
   final String label;
   final List<Assignment> items;
   final Widget leading;
-  const _AssignmentSection({required this.label, required this.items, required this.leading});
+  final VoidCallback onDataChanged;
+
+  const _AssignmentSection({
+    required this.label,
+    required this.items,
+    required this.leading,
+    required this.onDataChanged,
+  });
 
   String _formatMonthDay(DateTime dt) {
     const mnames = [
@@ -327,22 +728,51 @@ class _AssignmentSection extends StatelessWidget {
               dt = DateTime.now();
             }
             final pretty = 'Due: ${_formatMonthDay(dt)}';
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFF343A40), borderRadius: BorderRadius.circular(14)),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle_outline, color: const Color(0xFF9FB3C6)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(a.title, style: base.bodyLarge?.copyWith(color: const Color(0xFFF7ECE1), fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text('$pretty  •  ${a.submissionLocation ?? ''}', style: base.bodyMedium?.copyWith(color: const Color(0xFF9FB3C6))),
-                    ]),
+            return GestureDetector(
+              onDoubleTap: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text("Delete ${a.title}?"),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text("Cancel"),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          try {
+                            await DatabaseProvider().deleteAssignment(a.id!);
+                            Navigator.of(context).pop();
+                            onDataChanged();
+                          } catch (e) {
+                            Navigator.of(context).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting session: $e')));
+                          }
+                        },
+                        child: const Text("Delete"),
+                      ),
+                    ],
                   ),
-                ],
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: const Color(0xFF343A40), borderRadius: BorderRadius.circular(14)),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, color: const Color(0xFF9FB3C6)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(a.title, style: base.bodyLarge?.copyWith(color: const Color(0xFFF7ECE1), fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
+                        Text('$pretty  •  ${a.submissionLocation ?? ''}', style: base.bodyMedium?.copyWith(color: const Color(0xFF9FB3C6))),
+                      ]),
+                    ),
+                  ],
+                ),
               ),
             );
           }).toList(),
