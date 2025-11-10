@@ -1012,8 +1012,16 @@ class DatabaseProvider {
     await db.insert(
       'courses',
       course.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      conflictAlgorithm: ConflictAlgorithm.ignore,
     );
+    if (course.title != null) {
+      await db.update(
+        'courses',
+        {'title': course.title},
+        where: 'course_code = ?',
+        whereArgs: [course.courseCode],
+      );
+    }
   }
 
   Future<Course?> getCourse(String courseCode) async {
