@@ -5,103 +5,69 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:flutter/services.dart';
+import 'dart:io' show Platform;
+import 'package:permission_handler/permission_handler.dart';
 
 class TimerService {
-  final FlutterLocalNotificationsPlugin _notifPlugin =
-  FlutterLocalNotificationsPlugin();
-
   final ValueNotifier<int> remainingSecondsNotifier = ValueNotifier<int>(0);
-
   int _startSeconds = 0;
   DateTime? _endTimeUtc;
   Timer? _uiTimer;
-
   static const String _kStartKey = 'timer_start_seconds';
   static const String _kRemKey = 'timer_remaining_seconds';
   static const String _kEndKey = 'timer_end_utc';
-  static const int _notificationId = 0;
+  VoidCallback? onTimerEnd;
 
-  TimerService() {
-    // Initialize timezone database (required by zonedSchedule).
+  TimerService({this.onTimerEnd}) { // 2. ADD IT TO THE CONSTRUCTOR
     tzdata.initializeTimeZones();
-    _initNotifications();
     _restoreState();
   }
-
-  Future<void> _initNotifications() async {
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    final iosInit = DarwinInitializationSettings();
-    final settings = InitializationSettings(android: androidInit, iOS: iosInit);
-
-    await _notifPlugin.initialize(settings,
-        onDidReceiveNotificationResponse: (response) {
-          // handle tap if you want
-        });
-
-    // Request permissions on iOS. On Android, POST_NOTIFICATIONS permission must be
-    // added to AndroidManifest.xml; for Android 13+ you should request at runtime.
-    // NOT DONE YET, WILL NOT WORK
-    await _notifPlugin
-        .resolvePlatformSpecificImplementation<
-        IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(alert: true, badge: true, sound: true);
-  }
-
   void setTimer(int seconds) {
     _startSeconds = seconds;
     remainingSecondsNotifier.value = seconds;
     _saveState();
   }
-
   Future<void> start() async {
     // If already running and finish time is in future, don't restart
     if (_endTimeUtc != null && _endTimeUtc!.isAfter(DateTime.now().toUtc())) {
       return;
     }
-
     final remaining = remainingSecondsNotifier.value;
     _endTimeUtc = DateTime.now().toUtc().add(Duration(seconds: remaining));
-    await _scheduleNotificationAt(_endTimeUtc!);
     _startUiTicker();
     _saveState();
   }
-
   Future<void> pause() async {
     _uiTimer?.cancel();
     _uiTimer = null;
-
     if (_endTimeUtc != null) {
       final nowUtc = DateTime.now().toUtc();
       final rem = _endTimeUtc!.difference(nowUtc).inSeconds;
       remainingSecondsNotifier.value = rem > 0 ? rem : 0;
     }
-
     _endTimeUtc = null;
-    await _cancelScheduledNotification();
     _saveState();
   }
-
   Future<void> reset({bool autoStart = false}) async {
     _uiTimer?.cancel();
     _uiTimer = null;
     _endTimeUtc = null;
     remainingSecondsNotifier.value = _startSeconds;
-    await _cancelScheduledNotification();
     _saveState();
     if (autoStart) await start();
   }
-
   void _startUiTicker() {
     _uiTimer?.cancel();
     _tickOnce();
     _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tickOnce());
   }
-
+  // NOTIFICATON GOES <= 0
   void _tickOnce() {
     if (_endTimeUtc == null) return;
     final nowUtc = DateTime.now().toUtc();
     final remaining = _endTimeUtc!.difference(nowUtc).inSeconds;
     if (remaining <= 0) {
+      onTimerEnd?.call();
       remainingSecondsNotifier.value = 0;
       _uiTimer?.cancel();
       _uiTimer = null;
@@ -112,45 +78,6 @@ class TimerService {
       remainingSecondsNotifier.value = remaining;
     }
   }
-
-  Future<void> _scheduleNotificationAt(DateTime endUtc) async {
-    final tzDate = tz.TZDateTime.from(endUtc.toLocal(), tz.local);
-
-    try {
-      await _notifPlugin.zonedSchedule(
-        _notificationId,
-        'Timer finished',
-        'Your timer has completed.',
-        tzDate,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'timer_channel_id',
-            'Timer',
-            channelDescription: 'Timer notifications',
-            importance: Importance.max,
-            priority: Priority.high,
-          ),
-          iOS: DarwinNotificationDetails(),
-        ),
-        // keep androidScheduleMode if you want exact; it may fail on some devices
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      );
-    } on PlatformException catch (e) {
-      // Exact alarms not permitted (or other platform error).
-      // Log for debugging, but do NOT rethrow — allow the timer to continue.
-      debugPrint('Notification scheduling failed: ${e.code} — ${e.message}');
-      // Optionally: fallback to a non-exact schedule (inexact) or skip notification.
-      // Do nothing further here so the timer still starts.
-    } catch (e) {
-      // Catch any other unexpected error to prevent crash.
-      debugPrint('Notification scheduling unexpected error: $e');
-    }
-  }
-
-  Future<void> _cancelScheduledNotification() async {
-    await _notifPlugin.cancel(_notificationId);
-  }
-
   Future<void> _saveState() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kStartKey, _startSeconds);
@@ -158,7 +85,6 @@ class TimerService {
     await prefs.setString(
         _kEndKey, _endTimeUtc?.toIso8601String() ?? '');
   }
-
   Future<void> _restoreState() async {
     final prefs = await SharedPreferences.getInstance();
     _startSeconds = prefs.getInt(_kStartKey) ?? 0;
@@ -180,36 +106,92 @@ class TimerService {
       }
     }
   }
-
   Future<void> dispose() async {
     _uiTimer?.cancel();
     remainingSecondsNotifier.dispose();
   }
 }
-
 class TimerPage extends StatefulWidget {
   const TimerPage({super.key});
-
   @override
   State<TimerPage> createState() => _TimerPageState();
 }
-
 class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
   late final TimerService _timerService;
   final TextEditingController _controller = TextEditingController();
-
+  late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
+    flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+    const AndroidInitializationSettings initializationSettingsAndroid =
+    AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+    );
+    flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse:
+          (NotificationResponse notificationResponse) {
+        onSelectNotification(notificationResponse.payload); //user defined method (block of code)
+        print("Notification tapped!");
+      },
+    );
+    if (Platform.isAndroid) {
+      _requestNotificationPermission();
+    }
 
-    _timerService = TimerService();
+    WidgetsBinding.instance.addObserver(this);
+    _timerService = TimerService(onTimerEnd: showNotification);
     // Rebuild when remaining seconds changes
     _timerService.remainingSecondsNotifier.addListener(() {
       if (mounted) setState(() {});
     });
   }
-
+  Future<void> _requestNotificationPermission() async {
+    if (Platform.isAndroid) {
+      // Check if permission hasn’t been granted yet
+      if (await Permission.notification.isDenied) {
+        // Ask the user for notification permission
+        PermissionStatus status = await Permission.notification.request();
+        // Log the result (for debugging)
+        if (status.isDenied) {
+          print("Notification permission denied");
+        } else if (status.isGranted) {
+          print("Notification permission granted");
+        }
+      }
+    }
+  }
+  Future<void> onSelectNotification(String? payload) async {
+    if (payload != null) {
+      print('Notification payload received: $payload');
+      // Here you could navigate to another screen based on payload info
+    }
+  }
+  Future<void> showNotification() async {
+    // Define Android notification channel details
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+    AndroidNotificationDetails(
+      'your_channel_id',          // Unique ID for grouping similar notifications
+      'your_channel_name',        // Human-readable name shown in settings
+      channelDescription:
+      'your channel description', // Shown in Android system settings
+      importance: Importance.max, // Makes the notification pop up
+      priority: Priority.high,    // Ensures prompt delivery
+    );
+    //  platform-specific notification settings
+    const NotificationDetails platformChannelSpecifics =
+    NotificationDetails(android: androidPlatformChannelSpecifics);
+    // Actually show the notification
+    await flutterLocalNotificationsPlugin.show(
+      0,                           // Notification ID (0 = first)
+      'Timer End!',                    // Title text
+      'Your timer has just finished!', // Body text
+      platformChannelSpecifics,    // Config defined above
+      payload: 'Notification Payload', // Optional string passed on tap
+    );
+  }
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -217,7 +199,6 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     _controller.dispose();
     super.dispose();
   }
-
   // When the app resumes, the TimerService already uses wall-clock time,
   // but we ensure the UI ticker is running if necessary by reloading state.
   @override
@@ -228,36 +209,29 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
       if (mounted) setState(() {});
     }
   }
-
   String _formatTime(int seconds) {
     final int m = seconds ~/ 60;
     final int s = seconds % 60;
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
-
   // UI wrappers that call the service
   void startTimer() => _timerService.start();
   void setTimer(int length) {
     _timerService.setTimer(length);
     _controller.text = length.toString();
   }
-
   void pauseTimer() => _timerService.pause();
-
   void resetTimer({bool autoStart = false}) =>
       _timerService.reset(autoStart: autoStart);
-
   @override
   Widget build(BuildContext context) {
     final remaining = _timerService.remainingSecondsNotifier.value;
-
     return Scaffold(
       backgroundColor: const Color(0xFF1A1E22),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             final scaleFactor = (constraints.maxHeight / 800).clamp(0.7, 1.0);
-
             return Transform.scale(
               scale: scaleFactor,
               alignment: Alignment.topCenter,
@@ -296,7 +270,6 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
                           ),
                         ),
                         const SizedBox(height: 10),
-
                         // Preset buttons
                         Wrap(
                           alignment: WrapAlignment.center,
@@ -304,13 +277,13 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
                           children: [
                             _PulseButton(label: '0', onTap: () => setTimer(0)),
                             _PulseButton(
+                              //SET TO 20 SECONDS FOR TESTING PURPOSES
                                 label: '10', onTap: () => setTimer(10 * 60)),
                             _PulseButton(
                                 label: '30', onTap: () => setTimer(30 * 60)),
                           ],
                         ),
                         const SizedBox(height: 30),
-
                         // Control buttons
                         Wrap(
                           alignment: WrapAlignment.center,
@@ -336,27 +309,22 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     );
   }
 }
-
 /// A text button that briefly scales up when pressed.
 class _PulseButton extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
   const _PulseButton({required this.label, required this.onTap});
-
   @override
   State<_PulseButton> createState() => _PulseButtonState();
 }
-
 class _PulseButtonState extends State<_PulseButton> {
   bool _pressed = false;
-
   void _animatePulse() async {
     setState(() => _pressed = true);
     await Future.delayed(const Duration(milliseconds: 100));
     setState(() => _pressed = false);
     widget.onTap();
   }
-
   @override
   Widget build(BuildContext context) {
     return AnimatedScale(
@@ -381,27 +349,22 @@ class _PulseButtonState extends State<_PulseButton> {
     );
   }
 }
-
 /// An icon button that briefly scales up when pressed.
 class _PulseIconButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback onTap;
   const _PulseIconButton({required this.icon, required this.onTap});
-
   @override
   State<_PulseIconButton> createState() => _PulseIconButtonState();
 }
-
 class _PulseIconButtonState extends State<_PulseIconButton> {
   bool _pressed = false;
-
   void _animatePulse() async {
     setState(() => _pressed = true);
     await Future.delayed(const Duration(milliseconds: 100));
     setState(() => _pressed = false);
     widget.onTap();
   }
-
   @override
   Widget build(BuildContext context) {
     return AnimatedScale(

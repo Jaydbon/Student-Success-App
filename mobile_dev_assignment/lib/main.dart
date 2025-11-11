@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_dev_assignment/timer_page.dart';
 import 'schedule_page.dart';
+
 void main() {
   runApp(_MyApp());
 }
@@ -28,12 +29,11 @@ class _MyApp extends StatelessWidget {
     ),
   );
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       theme: customTheme,
-      home: HomePage(),
+      home: const HomePage(),
     );
   }
 }
@@ -63,13 +63,12 @@ class HomePageState extends State<HomePage> {
   }
 
   final List<Widget> _pages = const [
-    SchedulePage(), // this runs the external file
+    SchedulePage(), // external file
     TimerPage(),
     Center(child: Text('Home (coming soon)')),
     Center(child: Text('Food (coming soon)')),
     Center(child: Text('Map (coming soon)')),
   ];
-
 
   @override
   Widget build(BuildContext context) {
@@ -77,59 +76,60 @@ class HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: Text(pages[selectedIndex]),
       ),
-
       body: _pages[selectedIndex],
-
-
       bottomNavigationBar: Container(
-    margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
- // space around the bar
-    decoration: BoxDecoration(
-      color: const Color.fromARGB(133, 117, 158, 188), // your background color
-      borderRadius: BorderRadius.circular(30), // rounded corners
-      boxShadow: [
-        BoxShadow(
-          color: const Color(0x10000000),
-          blurRadius: 8,
-          offset: const Offset(0, 4),
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        // space around the bar
+        decoration: BoxDecoration(
+          color: const Color.fromARGB(133, 117, 158, 188),
+          // background color
+          borderRadius: BorderRadius.circular(30),
+          // rounded corners
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x10000000),
+              blurRadius: 8,
+              offset: Offset(0, 4),
+            ),
+          ],
         ),
-      ],
-    ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(30),
-      child: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: const Color.fromARGB(107, 0, 0, 0), // let container color show through
-        elevation: 0, // remove default shadow
-        currentIndex: selectedIndex,
-        onTap: _onItemTapped,
-        selectedItemColor: const Color.fromARGB(255, 117, 158, 188),
-        unselectedItemColor: const Color(0xFFF7ECE1),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month_outlined),
-            label: 'Schedule',
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: const Color.fromARGB(107, 0, 0, 0),
+            // let container color show through
+            elevation: 0,
+            // remove default shadow
+            currentIndex: selectedIndex,
+            onTap: _onItemTapped,
+            selectedItemColor: const Color.fromARGB(255, 117, 158, 188),
+            unselectedItemColor: const Color(0xFFF7ECE1),
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.calendar_month_outlined),
+                label: 'Schedule',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.timer_outlined),
+                label: 'Timer',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_outlined),
+                label: 'Home',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.fastfood_outlined),
+                label: 'Food',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.map_outlined),
+                label: 'Map',
+              ),
+            ],
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.timer_outlined),
-            label: 'Timer',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.fastfood_outlined),
-            label: 'Food',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            label: 'Map',
-          )
-        ],
+        ),
       ),
-    ),
-  ),
-);
+    );
   }
 }
