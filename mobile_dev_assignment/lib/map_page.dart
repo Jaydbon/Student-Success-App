@@ -14,9 +14,14 @@ class _MapPageState extends State<MapPage> {
   late MapController _mapController;
   final TextEditingController _controller = TextEditingController();
   final Map<String, LatLng> _locations = {
-    'sci': LatLng(43.9452769, -78.8963984),
-    'bit': LatLng(43.9452497, -78.8961509),
-    'sir': LatLng(43.9456476, -78.8974536),
+    'pav': LatLng(43.9434,-78.8987),
+    'sci': LatLng(43.9446,-78.8965),
+    'bit': LatLng(43.9453,-78.8962),
+    'erc': LatLng(43.9458,-78.8964),
+    'sha': LatLng(43.9463,-78.8966),
+    'lib': LatLng(43.9460,-78.8975),
+    'eng': LatLng(43.9460,-78.8985),
+    'sir': LatLng(43.9480,-78.8990),
   };
 
   final List<Marker> _markers = [];
