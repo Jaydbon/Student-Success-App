@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_dev_assignment/timer_page.dart';
 import 'schedule_page.dart';
+import 'map_page.dart';
 
 void main() {
   runApp(_MyApp());
@@ -62,12 +63,12 @@ class HomePageState extends State<HomePage> {
     });
   }
 
-  final List<Widget> _pages = const [
-    SchedulePage(), // external file
-    TimerPage(),
+  final List<Widget> _pages = [
+    const SchedulePage(), // external file
+    const TimerPage(),
     Center(child: Text('Home (coming soon)')),
     Center(child: Text('Food (coming soon)')),
-    Center(child: Text('Map (coming soon)')),
+    MapPage(),
   ];
 
   @override
