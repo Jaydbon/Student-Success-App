@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:mobile_dev_assignment/timer_page.dart';
 import 'schedule_page.dart';
 import 'map_page.dart';
+import 'home_overview_page.dart';
+import 'food_page.dart';
 
 void main() {
   runApp(_MyApp());
@@ -63,11 +65,11 @@ class HomePageState extends State<HomePage> {
     });
   }
 
-  final List<Widget> _pages = [
-    const SchedulePage(), // external file
+  final List<Widget> _pages = const [
+    const SchedulePage(),
     const TimerPage(),
-    Center(child: Text('Home (coming soon)')),
-    Center(child: Text('Food (coming soon)')),
+    const HomeOverviewPage(),
+    const FoodPage(),
     MapPage(),
   ];
 
