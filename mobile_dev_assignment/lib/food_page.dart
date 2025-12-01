@@ -134,12 +134,12 @@ class FoodPage extends StatelessWidget {
                     color: Color(0xFF9FB3C6),
                   ),
                   const SizedBox(width: 4),
-                  Text(
+                  Flexible(child: Text(
                     place.hours,
                     style: base.bodyMedium?.copyWith(
                       color: const Color(0xFF9FB3C6),
                     ),
-                  ),
+                  )),
                 ],
               ),
               const SizedBox(height: 8),
